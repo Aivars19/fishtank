@@ -1,0 +1,275 @@
+<html>
+<style>
+html, body {width: 100%; height: 100%;}
+canvas {width: 100%; height: 100%; display: block;}
+</style>
+
+
+<body>
+<canvas id="canvas" ></canvas>
+
+<script>
+/* 
+    Fish tank simulation. 
+*/ 
+var COUNT = 80; // how many in tank
+var COUNTSTONES = 2;
+var SPEED = 0.05; // personal distance per tick
+var PERSONAL = 20; // personal zone. 
+var CENTRE = {x:0, y:0}; //= {x:0, y:0};
+var TICK = 10;
+var FOODRATE = 8.0; // food per second
+var ENERGYLOSS = 0.4; // loss per second
+
+var population = Array(); 
+var stones = Array();
+var food = Array();
+
+var mousepos = {x:0, y:0};
+
+function init_objects(){
+    for (var i=0; i<COUNT; i++){
+        population[i] = {
+            pos: randompos(),
+            target: {x:0, y:0},
+            energy: 8.0 + Math.random() * 4.0
+            };
+    }
+
+    for (var i=0; i<COUNTSTONES; i++){
+        stones[i] = randompos();
+        stones[i].size = 10 + PERSONAL * Math.random();
+    }
+}
+
+function dist(pos1, pos2) {
+    if (!pos1 || !pos2)
+        debugger;
+    return Math.pow(Math.pow(pos1.x-pos2.x, 2) +  Math.pow(pos1.y-pos2.y, 2), 0.5);
+}
+function direction(pos1, pos2) {
+    return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x);
+}
+function newpos(pos, direction, distance){
+    return {
+        x: pos.x + Math.cos(direction) * distance,
+        y: pos.y + Math.sin(direction) * distance}
+}
+function randompos(){
+    return { 
+        x: canvas.width * (Math.random()-0.5),  
+        y: canvas.height * (Math.random() - 0.5)};
+}
+
+function population_move() {
+   
+   // add food
+   if ( Math.random() < FOODRATE * TICK / 1000)
+   {
+       var newfood = randompos();
+       newfood.type = 1; // berry
+       newfood.energy = 5; 
+       food.push(newfood);
+   }
+   
+   for (var i=population.length-1; i>=0; i--)
+   {
+    var fish = population[i];
+    fish.panic = false;
+    fish.energy-= ENERGYLOSS * TICK / 1000;
+    
+    // raise panic if we are too far (prefer to move to centre)
+    if (Math.abs(fish.pos.x) > 0.499 * canvas.width || Math.abs(fish.pos.y) > 0.499 * canvas.height) {
+        fish.panic = true;
+        fish.target = randompos();
+    }
+    if ( dist(fish.pos, mousepos)<PERSONAL) fish.panic = true; 
+    
+    // check closest fish
+    for (var j=0; j<population.length; j++)
+    {
+        if (j==i) continue;
+        var otherfish = population[j]; 
+        var rel_dist = dist(otherfish.pos, fish.pos) / (otherfish.energy + fish.energy);
+        if (rel_dist < 0.01) rel_dist = 0.01;
+        
+        var force_attract = Math.max(0, 2 - 2 * Math.pow(rel_dist - 2, 2)); // most attractive at distance 2 PERSONALS. 
+        var force_repulse = - 5 / Math.pow(rel_dist * 0.8, 3);
+        if (force_repulse > -0.1) force_repulse = 0;
+        
+        fish.target = newpos(fish.target, direction(fish.pos, otherfish.pos), (force_attract + force_repulse)  * PERSONAL);
+    }
+
+    // check stones
+    for (var j=0; j<stones.length; j++)
+    {
+        //if we are too close to stone - then change direction away from stone
+        if ( dist(fish.pos, stones[j]) < stones[j].size + fish.energy * 1.5) 
+        {
+            fish.target = newpos(fish.target, direction(fish.pos, stones[j]), - PERSONAL); //* (stones[j].size - dist(stones[j], fish.pos)));
+            fish.panic = true;
+        }
+    }
+    
+    // eat food
+    for (var j=food.length -1 ; j >= 0; j--)
+    {
+        if (dist(fish.pos, food[j])<5)
+        {
+            fish.energy += food[j].energy; 
+            food.splice(j,1);
+            continue;
+        }   
+        if (dist(fish.pos, food[j])<PERSONAL * 10)
+            fish.target = newpos(fish.target, direction(fish.target, food[j]), PERSONAL * 0.2);
+        if (dist(fish.pos, food[j])<PERSONAL * 1)
+        {
+            fish.target = newpos(fish.pos, direction(fish.pos, food[j]), PERSONAL );
+            break;
+        }
+    }
+
+    // DIE OR LIVE
+    if (fish.energy < 5.0)
+    {
+        var newfood = newpos(fish.pos, Math.random() * Math.PI * 2, 2);
+        newfood.type = 2;
+        newfood.energy = fish.energy;
+        food.push(newfood);
+        population.splice(i,1);
+        continue;
+    }
+    
+    if (fish.energy > 30.0)
+    {
+        fish.energy *= 0.2 + 0.6 * Math.random();
+        
+        var newfish = {};
+        newfish.pos = newpos(fish.pos, Math.random() * Math.PI * 2, PERSONAL);
+        newfish.target = {x: fish.target.x, y: fish.target.y};
+        newfish.energy = fish.energy;
+        population.push(newfish);
+    }
+    if (fish.energy > 29.0)
+    {
+        for (var x = 0; x<6; x++)
+        {
+            var newfood = newpos(fish.pos, Math.random() * Math.PI * 2, PERSONAL * 3);
+            newfood.type = 2;
+            newfood.energy = 5;
+            food.push(newfood);
+        }
+        population.splice(i,1);
+    }
+    
+   
+    // move fish
+    var fishspeed = SPEED * dist(fish.pos, fish.target);
+    if (fishspeed > PERSONAL * 3 * SPEED)
+        fishspeed = PERSONAL * 3 * SPEED;
+    if (fish.panic) fishspeed *= 2;
+
+    // random vobble
+    fish.target = newpos(fish.target, Math.random() * Math.PI * 2, Math.random() * PERSONAL * 0.4);
+    
+    fish.target = newpos(fish.pos, direction(fish.pos, fish.target), PERSONAL*2);
+    fish.pos = newpos(fish.pos, direction(fish.pos, fish.target), fishspeed);
+    
+   }
+}
+
+
+function draw() {
+    var canvas = document.getElementById('canvas');
+    var ctx = document.getElementById('canvas').getContext('2d');
+    ctx.save();
+    ctx.scale(1,1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.translate(canvas.width/2,canvas.height/2);
+    
+    // ARENA
+    ctx.fillStyle = 'green';
+    ctx.beginPath();
+    ctx.fillRect(-0.5 * canvas.width, -0.5 * canvas.height, canvas.width, canvas.height )
+    //ctx.arc(0,0,ZONE,0,Math.PI * 2);
+    ctx.fill();
+    
+    // MOUSE over
+    ctx.fillStyle = 'blue';
+    ctx.beginPath();
+    ctx.arc(mousepos.x, mousepos.y,PERSONAL,0,Math.PI * 2);
+    ctx.fill();
+
+    // stones
+    ctx.fillStyle = 'gray';
+    for (var j=0; j<stones.length; j++)
+    {
+      ctx.beginPath();
+      ctx.arc(stones[j].x, stones[j].y, stones[j].size, 0,Math.PI * 2);
+      ctx.fill();
+    }
+
+    // food
+    ctx.fillStyle = 'red';
+    for (var j=0; j<food.length; j++)
+    {
+        if (food[j].type == 1)
+            ctx.fillStyle = 'red';
+        else
+            ctx.fillStyle = 'brown';
+        
+        ctx.beginPath();
+        ctx.arc(food[j].x, food[j].y, food[j].energy, 0,Math.PI * 2);
+        ctx.fill();
+    }
+    
+    for (var i=0; i<population.length; i++) {
+        var fish = population[i];
+        
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 4;
+        
+        ctx.fillStyle= 'white';
+        if (fish.energy < 6.0) ctx.fillStyle= 'gray';
+        ctx.beginPath();
+        var d = direction (fish.pos, fish.target);
+        ctx.arc(fish.pos.x, fish.pos.y, fish.energy, d + 1.0, d - 1.0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+    }
+    ctx.restore();
+      
+    window.requestAnimationFrame(draw);
+}
+
+window.requestAnimationFrame(draw);
+window.setInterval(population_move, TICK);
+
+</script>
+
+<script>
+document.getElementById('canvas').addEventListener('mousemove', function(evt) {
+    var rect = canvas.getBoundingClientRect();
+    mousepos.x = (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width - 0.5 * canvas.width ;
+    mousepos.y = (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height - 0.5 * canvas.height ;
+    });
+
+document.getElementById('canvas').addEventListener('mouseup', function(evt) {
+    var rect = canvas.getBoundingClientRect();
+    stones.push({ 
+        x: (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width - 0.5 * canvas.width,
+        y: (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height - 0.5 * canvas.height,
+        size : 10 + Math.random() * PERSONAL
+    });
+    });
+    
+var canvas = document.getElementById('canvas');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+init_objects();
+
+</script>
+</body>
+</html>
