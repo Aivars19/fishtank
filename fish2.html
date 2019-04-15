@@ -173,8 +173,8 @@ document.getElementById('canvas').addEventListener('mousemove', function(event) 
 
 document.getElementById('canvas').addEventListener('mouseup', function(event) {
     stones.push({ 
-        x : event.pageX - canvas.offsetLeft - canvas.width/2,
-        y : event.pageY - canvas.offsetTop - canvas.height/2,
+        x: (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width,
+        y: (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height,
         size : 10 + Math.random() * PERSONAL
     });
     });
