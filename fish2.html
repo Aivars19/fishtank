@@ -1,0 +1,197 @@
+<html>
+<style>
+html, body {width: 100%; height: 100%;}
+canvas {width: 100%; height: 100%; display: block;}
+</style>
+<script>
+/* 
+    Fish tank simulation. 
+*/ 
+var X = 600;
+var Y = 600;
+var COUNT = 80; // how many in tank
+var COUNTSTONES = 20;
+var SPEED = 0.02; // personal distance per tick
+var ZONE = 500;
+var PERSONAL = 20; // personal zone. 
+var CENTRE = {x:0, y:0}; //= {x:0, y:0};
+var TICK = 10;
+
+
+var population = Array(); 
+var stones = Array();
+
+var mousepos = {x:X, y:Y};
+
+for (var i=0; i<COUNT; i++){
+    population[i] = {
+        pos: {x: ZONE * Math.random() - ZONE / 2, y: ZONE * Math.random() - ZONE / 2},
+        target: {x:0, y:0}
+        };
+}
+
+for (var i=0; i<COUNTSTONES; i++){
+    stones[i] = {
+        x: ZONE * Math.random() - ZONE /2, 
+        y: ZONE * Math.random() - ZONE /2,
+        size: 10 + PERSONAL * Math.random()
+        } 
+}
+
+function dist(pos1, pos2) {
+    return Math.pow(Math.pow(pos1.x-pos2.x, 2) +  Math.pow(pos1.y-pos2.y, 2), 0.5);
+}
+function direction(pos1, pos2) {
+    return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x);
+}
+function newpos(pos, direction, distance){
+    return {
+        x: pos.x + Math.cos(direction) * distance,
+        y: pos.y + Math.sin(direction) * distance}
+}
+
+function population_move() {
+   
+   for (var i=0; i<population.length; i++)
+   {
+    var fish = population[i];
+    fish.panic = false;
+    
+    // raise panic if we are too far (prefer to move to centre)
+    if ( dist(fish.pos, CENTRE)> ZONE) {
+        fish.panic = true;
+        fish.target = newpos(CENTRE, Math.random() * Math.PI * 2, ZONE * 0.5);
+    }
+    if ( dist(fish.pos, mousepos)<PERSONAL) fish.panic = true; 
+    
+    // check closest fish
+    for (var j=0; j<population.length; j++)
+    {
+        if (j==i) continue;
+        var otherfish = population[j]; 
+        var rel_dist = dist(otherfish.pos, fish.pos) / PERSONAL;
+        if (rel_dist < 0.01) rel_dist = 0.01;
+        
+        var force_attract = Math.max(0, 2 - 2 * Math.pow(rel_dist - 2, 2)); // most attractive at distance 2 PERSONALS. 
+        var force_repulse = - 5 / Math.pow(rel_dist * 0.8, 3);
+        if (force_repulse > -0.1) force_repulse = 0;
+        
+        fish.target = newpos(fish.target, direction(fish.pos, otherfish.pos), (force_attract + force_repulse)  * PERSONAL);
+        /*if ( dist(otherfish.pos, fish.pos) < PERSONAL * 1.0) 
+        {
+            // fish is too near - we want to move away from it. 
+            fish.target = newpos(fish.target, direction(fish.pos, otherfish.pos), - 2 * PERSONAL);
+            fish.panic = true;
+        }
+        
+        if (dist(otherfish.pos, fish.pos) < PERSONAL * 3 && !fish.panic)
+        {
+            // fish is visible - move towards 
+            fish.target = newpos(fish.target, direction(fish.target, otherfish.target), 0.1 * PERSONAL);
+        }
+        */
+    }
+    
+    // check stones
+    for (var j=0; j<stones.length; j++)
+    {
+        //if we are too close to stone - then change direction away FROM STONE
+        if ( dist(fish.pos, stones[j]) < stones[j].size + PERSONAL) 
+        {
+            fish.target = newpos(fish.target, direction(fish.pos, stones[j]), - PERSONAL); //* (stones[j].size - dist(stones[j], fish.pos)));
+            fish.panic = true;
+        }
+    }
+   
+    // move fish
+    var fishspeed = SPEED * dist(fish.pos, fish.target);
+    if (fishspeed > PERSONAL * 3 * SPEED)
+        fishspeed = PERSONAL * 3 * SPEED;
+    if (fish.panic) fishspeed *= 2;
+
+    // random vobble
+    fish.target = newpos(fish.target, Math.random() * Math.PI * 2, Math.random() * PERSONAL * 0.4);
+    
+    fish.target = newpos(fish.pos, direction(fish.pos, fish.target), PERSONAL*2);
+    fish.pos = newpos(fish.pos, direction(fish.pos, fish.target), fishspeed);
+    
+   }
+}
+
+window.setInterval(population_move, TICK);
+
+function draw() {
+    var canvas = document.getElementById('canvas');
+    var ctx = document.getElementById('canvas').getContext('2d');
+    ctx.save();
+    ctx.scale(1,1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.translate(canvas.width/2,canvas.height/2);
+    
+    // ARENA
+    ctx.fillStyle = 'green';
+    ctx.beginPath();
+    ctx.arc(0,0,ZONE,0,Math.PI * 2);
+    ctx.fill();
+    
+    // MOUSE over
+    ctx.fillStyle = 'blue';
+    ctx.beginPath();
+    ctx.arc(mousepos.x, mousepos.y,PERSONAL,0,Math.PI * 2);
+    ctx.fill();
+
+    // stones
+    ctx.fillStyle = 'gray';
+    for (var j=0; j<stones.length; j++)
+    {
+      ctx.beginPath();
+      ctx.arc(stones[j].x, stones[j].y, stones[j].size, 0,Math.PI * 2);
+      ctx.fill();
+    }
+    
+    for (var i=0; i<COUNT; i++) {
+        var fish = population[i];
+        
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 4;
+        ctx.fillStyle= 'white';
+
+        ctx.beginPath();
+        var d = direction (fish.pos, fish.target);
+        ctx.arc(fish.pos.x, fish.pos.y, 10, d + 1.0, d - 1.0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+    }
+    ctx.restore();
+      
+    window.requestAnimationFrame(draw);
+}
+
+window.requestAnimationFrame(draw);
+
+</script>
+
+<body>
+<canvas id="canvas" ></canvas>
+<script>
+document.getElementById('canvas').addEventListener('mousemove', function(event) {
+    mousepos.x = event.pageX - canvas.offsetLeft - canvas.width/2; 
+    mousepos.y = event.pageY - canvas.offsetTop - canvas.height/2;
+    });
+
+document.getElementById('canvas').addEventListener('mouseup', function(event) {
+    stones.push({ 
+        x : event.pageX - canvas.offsetLeft - canvas.width/2,
+        y : event.pageY - canvas.offsetTop - canvas.height/2,
+        size : 10 + Math.random() * PERSONAL
+    });
+    });
+    
+var canvas = document.getElementById('canvas');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+</script>
+</body>
+</html>
+
