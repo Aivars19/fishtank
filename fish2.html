@@ -166,15 +166,17 @@ window.setInterval(population_move, TICK);
 </script>
 
 <script>
-document.getElementById('canvas').addEventListener('mousemove', function(event) {
-    mousepos.x = event.pageX - canvas.offsetLeft - canvas.width/2; 
-    mousepos.y = event.pageY - canvas.offsetTop - canvas.height/2;
+document.getElementById('canvas').addEventListener('mousemove', function(evt) {
+    var rect = canvas.getBoundingClientRect();
+    mousepos.x = (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width - 0.5 * canvas.width ;
+    mousepos.y = (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height - 0.5 * canvas.height ;
     });
 
-document.getElementById('canvas').addEventListener('mouseup', function(event) {
+document.getElementById('canvas').addEventListener('mouseup', function(evt) {
+    var rect = canvas.getBoundingClientRect();
     stones.push({ 
-        x: (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width,
-        y: (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height,
+        x: (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width - 0.5 * canvas.width,
+        y: (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height - 0.5 * canvas.height,
         size : 10 + Math.random() * PERSONAL
     });
     });
@@ -188,4 +190,3 @@ init_objects();
 </script>
 </body>
 </html>
-
